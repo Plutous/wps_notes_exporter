@@ -1,0 +1,6 @@
+output/
+.browser-profile/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+note_home.tmp
