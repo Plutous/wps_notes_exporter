@@ -1,4 +1,6 @@
 output/
+output-*/
+input/
 .browser-profile/
 __pycache__/
 *.py[cod]

@@ -84,3 +84,58 @@ python export_wps_notes.py
 ## 示例效果
 
 ![图片](imgs/示例效果.png)
+
+## 一次性合并到 Pluto Notes 备份
+
+`import_wps_once.py` 不修改 Pluto Notes 应用代码、SQLite 数据库或任一输入 ZIP。它读取现有 Pluto 备份，将 WPS Markdown、分组和图片转换为当前 Pluto 备份格式，再生成一个新的合并备份。
+
+先执行 dry-run：
+
+```powershell
+python import_wps_once.py `
+  --wps-export "input\wps-notes-export-20260928-104144.zip" `
+  --pluto-backup "input\20260928_031251_189_5704fda9.zip" `
+  --output "output\pluto-notes-merged.zip" `
+  --group-map "学习=知识库" `
+  --group-map "工作=项目" `
+  --dry-run
+```
+
+`--group-map` 的左侧是 WPS 原分组名，右侧是 Pluto Notes 目标分组名，可以重复指定。只有设置了映射的 WPS 分组才会导入；未配置映射的分组及其便签会被过滤并记录在报告中。同名映射可写成 `--group-map "学习=学习"`。
+
+dry-run 会执行完整解析、UUID/分组映射、Markdown→Quill Delta、图片附件构造以及备份引用校验，但不会创建 `--output` 文件。确认报告无误后，使用完全相同的映射并去掉 `--dry-run`，才会生成正式备份：
+
+```powershell
+python import_wps_once.py `
+  --wps-export "input\wps-notes-export-20260928-104144.zip" `
+  --pluto-backup "input\20260928_031251_189_5704fda9.zip" `
+  --output "output\pluto-notes-merged.zip" `
+  --group-map "学习=知识库" `
+  --group-map "工作=项目"
+```
+
+安全与合并规则：
+
+- WPS 便签和新分组使用固定 namespace 的 UUIDv5，重复执行 ID 不变。
+- WPS 分组必须显式配置映射；目标名与有效 Pluto 分组同名时复用，否则创建新分组。
+- “未分组”也需显式映射，例如 `--group-map "未分组=收件箱"`。
+- 原 Pluto 分组、便签、附件、设置及 ID 原样保留。
+- 已存在的稳定 Note ID 内容相同则跳过；不同则生成确定性的冲突副本。
+- 图片生成附件记录，并在 Delta 中使用 `attachment://{attachmentId}`。
+- 所有时间转换为 UTC ISO 8601；保留创建、更新时间和置顶状态。
+- 拒绝 Zip Slip、损坏 ZIP、非 Pluto 备份、无效附件引用和不完整关联。
+- 正式输出先写同目录临时文件，通过等价于 `CloudBackupService._decode()` 的校验后才原子重命名。
+- 输出已经存在时拒绝覆盖。
+
+生成的正式 ZIP 除 `manifest.json`、`data.json` 和 `attachments/*` 外，还包含：
+
+- `import-report.json`
+- `import-report.md`
+
+报告记录新增/复用分组、增加/跳过便签、冲突、附件和失败项，但不会记录便签正文或认证信息。
+
+运行测试：
+
+```powershell
+python -m unittest discover -s tests -v
+```
